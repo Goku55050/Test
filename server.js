@@ -10,6 +10,7 @@ app.use(cors());
 
 const MUSIC_DIR = path.join(__dirname, "music");
 
+// ensure folder exists
 if (!fs.existsSync(MUSIC_DIR)) {
     fs.mkdirSync(MUSIC_DIR);
 }
@@ -33,26 +34,33 @@ app.get("/search", async (req, res) => {
         });
 
     } catch (err) {
+        console.log(err);
         res.json({ error: "Search failed" });
     }
 });
 
-/* 🎵 DOWNLOAD */
+/* 🎵 DOWNLOAD (yt-dlp via python) */
 app.get("/download", async (req, res) => {
     try {
         let url = req.query.url;
         if (!url) return res.json({ error: "No URL" });
 
+        // fix shorts
         url = url.replace("shorts/", "watch?v=");
 
         const id = Date.now();
         const filePath = path.join(MUSIC_DIR, id + ".mp3");
 
-        const command = `yt-dlp -x --audio-format mp3 --no-playlist -o "${filePath}" "${url}"`;
+        const command = `python3 -m yt_dlp -x --audio-format mp3 --no-playlist -o "${filePath}" "${url}"`;
 
-        exec(command, (error) => {
+        console.log("RUN:", command);
+
+        exec(command, (error, stdout, stderr) => {
+            console.log("STDOUT:", stdout);
+            console.log("STDERR:", stderr);
+
             if (error) {
-                console.log(error);
+                console.log("ERROR:", error);
                 return res.json({ error: "Download failed" });
             }
 
@@ -62,29 +70,35 @@ app.get("/download", async (req, res) => {
         });
 
     } catch (err) {
+        console.log("SERVER ERROR:", err);
         res.json({ error: "Download failed" });
     }
 });
 
-/* 📁 SERVE FILE */
+/* 📁 SERVE FILES */
 app.use("/music", express.static(MUSIC_DIR));
 
-/* 🧹 AUTO DELETE */
+/* 🧹 AUTO DELETE (1 hour old files) */
 setInterval(() => {
-    const files = fs.readdirSync(MUSIC_DIR);
+    try {
+        const files = fs.readdirSync(MUSIC_DIR);
 
-    files.forEach(file => {
-        const filePath = path.join(MUSIC_DIR, file);
-        const stats = fs.statSync(filePath);
+        files.forEach(file => {
+            const filePath = path.join(MUSIC_DIR, file);
+            const stats = fs.statSync(filePath);
 
-        if (Date.now() - stats.mtimeMs > 1000 * 60 * 60) {
-            fs.unlinkSync(filePath);
-        }
-    });
+            if (Date.now() - stats.mtimeMs > 1000 * 60 * 60) {
+                fs.unlinkSync(filePath);
+            }
+        });
+    } catch (err) {
+        console.log("CLEANUP ERROR:", err);
+    }
 }, 600000);
 
-/* 🚀 START */
+/* 🚀 START SERVER */
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-    console.log("Running on port " + PORT);
+    console.log("Server running on port " + PORT);
 });
