@@ -1,0 +1,13 @@
+{
+  "name": "ares-music-node",
+  "version": "1.0.0",
+  "description": "Ares Music Hub Node Backend",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "youtubei.js": "^12.2.0"
+  }
+}
