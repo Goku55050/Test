@@ -8,11 +8,12 @@ const { exec } = require("child_process");
 const app = express();
 app.use(cors());
 
-const MUSIC_DIR = path.join(__dirname, "music");
+// ✅ IMPORTANT: use /tmp for Render
+const MUSIC_DIR = "/tmp/music";
 
-// ensure folder exists
+// create folder safely
 if (!fs.existsSync(MUSIC_DIR)) {
-    fs.mkdirSync(MUSIC_DIR);
+    fs.mkdirSync(MUSIC_DIR, { recursive: true });
 }
 
 /* 🔍 SEARCH */
@@ -39,7 +40,7 @@ app.get("/search", async (req, res) => {
     }
 });
 
-/* 🎵 DOWNLOAD (yt-dlp via python) */
+/* 🎵 DOWNLOAD (FINAL FIXED) */
 app.get("/download", async (req, res) => {
     try {
         let url = req.query.url;
@@ -49,9 +50,9 @@ app.get("/download", async (req, res) => {
         url = url.replace("shorts/", "watch?v=");
 
         const id = Date.now();
-        const filePath = path.join(MUSIC_DIR, id + ".mp3");
+        const outputTemplate = path.join(MUSIC_DIR, `${id}.%(ext)s`);
 
-        const command = `python3 -m yt_dlp -x --audio-format mp3 --no-playlist -o "${filePath}" "${url}"`;
+        const command = `python3 -m yt_dlp -x --audio-format mp3 --no-playlist -o "${outputTemplate}" "${url}"`;
 
         console.log("RUN:", command);
 
@@ -64,8 +65,16 @@ app.get("/download", async (req, res) => {
                 return res.json({ error: "Download failed" });
             }
 
+            // find actual file
+            const files = fs.readdirSync(MUSIC_DIR);
+            const file = files.find(f => f.startsWith(id));
+
+            if (!file) {
+                return res.json({ error: "File not found after download" });
+            }
+
             res.json({
-                audio: `/music/${id}.mp3`
+                audio: `/music/${file}`
             });
         });
 
@@ -78,7 +87,7 @@ app.get("/download", async (req, res) => {
 /* 📁 SERVE FILES */
 app.use("/music", express.static(MUSIC_DIR));
 
-/* 🧹 AUTO DELETE (1 hour old files) */
+/* 🧹 AUTO DELETE (1 hour) */
 setInterval(() => {
     try {
         const files = fs.readdirSync(MUSIC_DIR);
@@ -96,7 +105,7 @@ setInterval(() => {
     }
 }, 600000);
 
-/* 🚀 START SERVER */
+/* 🚀 START */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
